@@ -42,7 +42,7 @@ chrome.action.onClicked.addListener(async function() {
         var extensionId = chrome.runtime.id;
         chrome.tabs.create({url: `chrome-extension://${extensionId}/index.html#/check`},
          function(tab){
-            tab.focus();
+            // tab.focus();
         });
         // 确保新的标签页在前台打开
         // if (newTab) newTab.focus();
