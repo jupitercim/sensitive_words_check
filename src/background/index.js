@@ -30,6 +30,26 @@ let chineseAnnotationDetectionFlag = false;
 // 敏感词检测标志
 let sensitiveWordDetectionFlag = false;
 
+chrome.action.onClicked.addListener(async function() {
+    // chrome.tabs.create({url: 'page.html'});
+    const tabs = await chrome.tabs.query({title: "Sensitive Word Check"})
+
+    // 如果tab存在，则直接Focus到这个tab
+    if(tabs.length!=0){
+        chrome.tabs.update(tabs[0].id, {active: true})
+    }else{
+
+        var extensionId = chrome.runtime.id;
+        chrome.tabs.create({url: `chrome-extension://${extensionId}/index.html#/check`},
+         function(tab){
+            tab.focus();
+        });
+        // 确保新的标签页在前台打开
+        // if (newTab) newTab.focus();
+        
+    }
+});
+
 
 chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
     const {action, tab} = request;

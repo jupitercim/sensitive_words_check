@@ -39,7 +39,6 @@
     }
   ],
   "action": {
-    "default_popup": "index.html",
     "default_icon": {
       "16": "/image/search.png",
       "32": "/image/search.png",

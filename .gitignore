@@ -1,0 +1,15 @@
+node_modules
+build/manifest.json
+build/insert.js
+build/image/search.png
+build/favicon.ico
+build/%PUBLIC_URL%/favicon.ico
+build/asset-manifest.json
+build/index.html
+build/static/css/content.css
+build/static/js/background.js
+build/static/js/background.js.LICENSE.txt
+build/static/js/content.js
+build/static/js/content.js.LICENSE.txt
+build/static/js/main.js
+build/static/js/main.js.LICENSE.txt
