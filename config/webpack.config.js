@@ -108,11 +108,11 @@ module.exports = function (webpackEnv) {
   const env = getClientEnvironment(paths.publicUrlOrPath.slice(0, -1));
 
   const shouldUseReactRefresh = env.raw.FAST_REFRESH;
-  resolve: {
-    fallback: {
-        path: require.resolve("path-browserify")
-    }
-  };
+  // resolve: {
+  //   fallback: {
+  //       path: require.resolve("path-browserify")
+  //   }
+  // };
   // common function to get style loaders
   const getStyleLoaders = (cssOptions, preProcessor) => {
     const loaders = [
