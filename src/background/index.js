@@ -1,5 +1,6 @@
 import { isValidUrl } from "@/utils/common";
 
+
 let timeout = 7000;
 let taskScreenShotFlag = false;
 let taskIgnoreUrl = [];
@@ -29,6 +30,8 @@ let checkTypes = ['xhr', 'fetch', 'stylesheet', 'document', 'script'];
 let chineseAnnotationDetectionFlag = false;
 // 敏感词检测标志
 let sensitiveWordDetectionFlag = false;
+// 翻译检测
+let TranslationComparisonFlag = false;
 
 chrome.action.onClicked.addListener(async function() {
     // chrome.tabs.create({url: 'page.html'});
@@ -49,7 +52,6 @@ chrome.action.onClicked.addListener(async function() {
         
     }
 });
-
 
 chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
     const {action, tab} = request;
@@ -137,7 +139,6 @@ chrome.runtime.onConnect.addListener(function(port) {
 });
 
 chrome.debugger.onEvent.addListener(async function (source, method, params) {
-    // console.log("chrome.debugger.onEvent.addListener(", source, method, params)
     if (method === 'Network.responseReceived') {
         if (checkTypes.includes(params.type.toLowerCase())) {
             pendingRequests[params.requestId] = { status: true, type: params.type, url: params.response.url };
@@ -173,6 +174,7 @@ async function  dealResponseBody(tabId, requestId, requestInfo) {
         'Network.getResponseBody',
         {requestId: requestId},
         async function (response) {
+            // console.log("dealResponseBody:", requestInfo.type, requestInfo.url)
             if(response.body===undefined){
                 // Todo
                 console.log("dealResponseBody response.body is undefined", requestInfo)
@@ -190,11 +192,34 @@ async function  dealResponseBody(tabId, requestId, requestInfo) {
             if(chineseAnnotationDetectionFlag){
                 await checkChineseAnnotation(tabId, requestInfo.url, body, requestInfo.type);
             }
+
+            if(TranslationComparisonFlag&& requestInfo.type == "Document"){
+                await checkTranslationComparison(requestInfo.url, body, requestInfo.type);
+            }
             
         });
 }
 
+/**
+ * 翻译比对
+ * @param {*} tabId 
+ * @param {*} url 
+ * @param {*} content 
+ * @param {*} words 
+ * @param {*} type 
+ */
+async function checkTranslationComparison(url, content, type){
+    console.log("checkTranslationComparison start:", url, type, content)
+    // 从URL中分析得倒当前的语言
+    const isValidText = (text) => {return text.length<100};
+    const result = getTextWithXPath(content, [], isValidText)
+    console.log("checkTranslationComparison result:", result)
+    // chrome.scripting.executeScript({target: {tabId: autoRunTab}, function: () => {
+    //     const result = getTextWithXPath(content, [], isValidText);
+    //     console.log("checkTranslationComparison result:", result)
+    // }}, ()=>{})
 
+}
 
 /**
  * 返回两个维度数据, 一个是以url返回,一个是以关键字返回
@@ -316,7 +341,7 @@ chrome.webRequest.onCompleted.addListener(
                                 // 如果不符合host的,就不在收集这个页面的url
                                 details.url = modifyUrl(details.url);
                                     // 页面加载完成后截图格式为base64
-                                    await captureTabScreenshot(autoRunTab, details.url);
+                                await captureTabScreenshot(autoRunTab, details.url);
                                 if(isHost(details.url, taskHost)){
                                     const aList = html[0].result.match(/<a.*?href="(.*?)".*?>(.*?)<\/a>/ig);
                                     // 讲当前页面的所有a标签的href提取出来,并且去重
@@ -425,7 +450,7 @@ function visitNextUrl() {
 }
 
 function initAutoRun(taskInfo) {
-    const {words, path, host, auto, screenShotFlag, duplicatePage, ignoreUrl, tasks} = taskInfo;
+    const {words, path, host, auto, screenShotFlag, duplicatePage, ignoreUrl, tasks, translationMapping} = taskInfo;
     console.log("initAutoRun:", taskInfo)
     taskScreenShotFlag = screenShotFlag;
     taskDuplicatePage = duplicatePage;
@@ -441,10 +466,20 @@ function initAutoRun(taskInfo) {
     sensitiveWordList = words;
     if(tasks.includes("Words_Check")){
         sensitiveWordDetectionFlag = true;
+    }else{
+        sensitiveWordDetectionFlag = false;
     }
     if(tasks.includes("Chinese_Annotation_Detection")){
         console.log("init Chinese_Annotation_Detection")
         chineseAnnotationDetectionFlag = true;
+    }else{
+        chineseAnnotationDetectionFlag = false;
+    }
+    if(tasks.includes("Translation_Comparison")){
+        console.log("init Translation_Comparison")
+        TranslationComparisonFlag = true
+    }else{
+        TranslationComparisonFlag = false;
     }
     if(tasks==[]){
         autoPort.postMessage({"action": "initError", "error": "please select at least one task."})
@@ -454,8 +489,7 @@ function initAutoRun(taskInfo) {
 }
 
 function afterStop() {
-    sensitiveWordDetectionFlag = false;
-    chineseAnnotationDetectionFlag = false;
+
 }
 
 function filterNotValidUrl(arr) {
@@ -517,6 +551,52 @@ async function captureTabScreenshot(tabId, url) {
             console.log("captureTabScreenshot error:", e)
         }
     });
+}
+
+
+function getXPath(element) {
+    if (element.id !== '')
+        return 'id("' + element.id + '")';
+    if (element === document.body)
+        return element.tagName;
+
+    var ix = 0;
+    var siblings = element.parentNode.childNodes;
+    for (var i = 0; i < siblings.length; i++) {
+        var sibling = siblings[i];
+        if (sibling === element)
+            return getXPath(element.parentNode) + '/' + element.tagName + '[' + (ix + 1) + ']';
+        if (sibling.nodeType === 1 && sibling.tagName === element.tagName)
+            ix++;
+    }
+}
+
+function getTextWithXPath(nodeString, path = [], isValidText) {
+    // 创建一个新的DOMParser实例
+    let parser = new DOMParser();
+    let node = parser.parseFromString(nodeString, 'text/html');
+    // Node.TEXT_NODE
+    console.log("node type:", node.nodeType)
+    if (node.nodeType === 3) {
+        var text = node.textContent.trim();
+        if (text !== '') {
+            if(isValidText===undefined){
+                console.log('Text: "' + text + '", XPath: ' + getXPath(node.parentNode));
+                return {"text": text, "xpath": getXPath(node.parentNode)};
+            }else{
+                if(isValidText(text)){
+                    console.log('Text: "' + text + '", XPath: ' + getXPath(node.parentNode));
+                    return {"text": text, "xpath": getXPath(node.parentNode)};
+                }
+            }
+
+        }
+    } else {
+        console.log("node childNodes:", node.childNodes)
+        for (var i = 0; i < node.childNodes.length; i++) {
+            getTextWithXPath(node.childNodes[i], path.concat(i), isValidText);
+        }
+    }
 }
 
 

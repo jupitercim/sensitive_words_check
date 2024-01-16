@@ -12,8 +12,11 @@ function TaskInfo(props) {
     const [host, setHost] = useState("")
     const [process, setProcess] = useState(0)
     const [duplicatePage, setDuplicatePage] = useState([]);
+    const [lanuage, setLanuage] = useState(["en","ru"]);
     const [ignoreUrl, setIgnoreUrl] = useState([]);
     const [tasks, setTasks] = useState(["Words_Check"])
+    // 翻译文本比对
+    var translationMapping = {};
 
     // 处理和service-worker的通信
     const port = chrome.runtime.connect({name: "autoScan"});
@@ -90,6 +93,10 @@ function TaskInfo(props) {
       {
         label: 'Chinese Annotation Detection',
         value: 'Chinese_Annotation_Detection',
+      },
+      {
+        label: 'Translation comparison',
+        value: 'Translation_Comparison',
       }
     ];
 
@@ -118,6 +125,11 @@ function TaskInfo(props) {
           label: 'Sensitive Word Config',
           children: <WordConfig words={props.words} onTagsChange={handleTagsChange} refresh={getSensitiveWordList}/>,
         },
+        {
+          key: 'lanuage',
+          label: 'Lanuage Config',
+          children: <WordConfig words={lanuage} onTagsChange={setLanuage} />,
+        },
 
         {
           key: 'path',
@@ -129,17 +141,16 @@ function TaskInfo(props) {
           label: 'Scan Host',
           children: <Input value={host} onChange={(e)=>{setScanHost(e.target.value)}} placeholder='please enter scan host'/>,
         },
-
-        // {
-        //   key: 'ignore url',
-        //   label: 'Ignore Url',
-        //   children: <WordConfig words={ignoreUrl} onTagsChange={setIgnoreUrl}/>,
-        // },
-        // {
-        //   key: 'Duplicate Page',
-        //   label: 'Duplicate Page',
-        //   children: <WordConfig words={duplicatePage} onTagsChange={setDuplicatePage} />,
-        // },
+        {
+          key: 'ignore url',
+          label: 'Ignore Url',
+          children: <WordConfig words={ignoreUrl} onTagsChange={setIgnoreUrl}/>,
+        },
+        {
+          key: 'Duplicate Page',
+          label: 'Duplicate Page',
+          children: <WordConfig words={duplicatePage} onTagsChange={setDuplicatePage} />,
+        },
         {
           key: 'status',
           label: 'Task Status',
@@ -158,28 +169,46 @@ function TaskInfo(props) {
         
         // 发送消息给service-worker，开始运行, 将参数发给service-worker
         // words, path
-        if((props.words.length===0 && tasks.includes("Words_Check"))|| isValidUrl(path)===false || host==="") {
+        if((props.words.length===0 && tasks.includes("Words_Check"))) {
           notification.open({
             message: 'task info config is not complete',
             description: 'please check task info config.',
           });
-        }else{
-          if(screenShotFlag){
-            notification.open({
-              message: 'ScreenShot Tips',
-              description: 'take screen should let target tab always active, so do not change active tab.Otherwise screenShot will not work.',
-            });
-          }
-          setRunStatus("processing")
-          setProcess(0)
-          //  清空当前的数据
-          props.clearData({});
-          // sendStartMessage(props.words, path);
-          port.postMessage({
-            "action": "startAuto", "words": props.words, "path": path, "host": host, "auto": auto,
-            "screenShotFlag": screenShotFlag, "duplicatePage": duplicatePage, "ignoreUrl": ignoreUrl, "tasks": tasks
+          return;
+        }
+
+        if(tasks.includes("Translation_Comparison") && (lanuage.length<=1 ||translationMapping.size===0)){
+          notification.open({
+            message: 'task info config is not complete',
+            description: 'translation comparson need set 2 lanuage at least.',
+          });
+          return;
+        }
+
+        if(isValidUrl(path)===false || host===""){
+          notification.open({
+            message: 'task info config is not complete',
+            description: 'host and path info need be completed.',
+          });
+          return;
+        }
+
+        if(screenShotFlag){
+          notification.open({
+            message: 'ScreenShot Tips',
+            description: 'take screen should let target tab always active, so do not change active tab.Otherwise screenShot will not work.',
           });
         }
+
+        setRunStatus("processing")
+        setProcess(0)
+        //  清空当前的数据
+        props.clearData({});
+        // sendStartMessage(props.words, path);
+        port.postMessage({
+          "action": "startAuto", "words": props.words, "lanuage": lanuage,"translationMapping": translationMapping, "path": path, "host": host, "auto": auto,
+          "screenShotFlag": screenShotFlag, "duplicatePage": duplicatePage, "ignoreUrl": ignoreUrl, "tasks": tasks
+        });
     }
 
     function handleStop() {
@@ -194,6 +223,7 @@ function TaskInfo(props) {
             <Descriptions size={"small"} title="Task Info" bordered items={items} 
                 extra={
                   <Space>
+                    {tasks.includes("Translation_Comparison")?<Button type="primary" onClick={()=>{alert("未实现")}}>Load lanuage Mapping</Button>:null}
                     {
                       runStatus==="default"||runStatus==="success"?
                       <Button type="primary" onClick={handleStart}>Start</Button>
